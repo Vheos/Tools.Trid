@@ -1,216 +1,194 @@
 namespace Vheos.Tools.Trid;
 
-public readonly struct TridVectorInt : IEquatable<TridVectorInt>
+using Vheos.Helpers.Math;
+using static Const;
+using static Helpers.Math.Const;
+
+public readonly struct TridVectorInt(i2 xy) : IEquatable<tvi>
 {
-    public readonly int X;
-    public readonly int Y;
-    public int Z
-        => -X - Y;
+    public readonly i2 XY = xy;
+    public readonly static tvi Zero = new(0, 0);
 
-    public TridVectorInt(int x, int y)
-    {
-        X = x;
-        Y = y;
-    }
+    #region Constructors
 
-    #region Static
-    public static TridVectorInt Zero = new(0, 0);
-    public static TridVectorInt FromXY(int x, int y)
-        => new(x, y);
-    public static TridVectorInt FromYZ(int y, int z)
-        => new(-y - z, y);
-    public static TridVectorInt FromZX(int z, int x)
-        => new(x, -x - z);
-    public static TridVectorInt From(TriangleAxis triangleAxis, int a)
-         => triangleAxis switch
-         {
-             TriangleAxis.X => FromXY(a, -a / 2),
-             TriangleAxis.Y => FromYZ(a, -a / 2),
-             TriangleAxis.Z => FromZX(a, -a / 2),
-             _ => default,
-         };
-    public static TridVectorInt From(VertexAxis vertexAxis, int a, int b)
-        => vertexAxis switch
-        {
-            VertexAxis.XY => FromXY(a, b),
-            VertexAxis.YZ => FromYZ(a, b),
-            VertexAxis.ZX => FromZX(a, b),
-            _ => default,
-        };
-    internal static TridVectorInt DirectionVector(TriangleDirection direction)
-        => direction.Sign() * From(direction.ToAxis(), +2);
-    internal static TridVectorInt DirectionVector(VertexDirection direction)
-        => direction.Sign() * From(direction.ToAxis(), +1, -1);
+    public TridVectorInt(i x, i y)
+        : this((x, y)) { }
+
     #endregion
 
     #region Math
-    public int Length
-        => (X.Abs() + Y.Abs() + Z.Abs()) / 2;
-    public TridVector Normalized
-        => this / Length;
-    public int Comp(Axis axis)
-        => axis switch
-        {
-            Axis.X => X,
-            Axis.Y => Y,
-            Axis.Z => Z,
-            _ => default,
-        };
 
-    // Spatial
-    public TridVectorInt OffsetTo(TridVectorInt a)
-        => a - this;
-    public TridVector OffsetTo(TridVector a)
-        => a - this;
-    public TridVector DirectionTo(TridVectorInt a)
-        => OffsetTo(a).Normalized;
-    public TridVector DirectionTo(TridVector a)
-        => OffsetTo(a).Normalized;
-    public TridVectorInt TriangleVectorTo(TridVectorInt a)
-        => OffsetTo(a).NearTriangleVector;
-    public TridVectorInt TriangleVectorTo(TridVector a)
-        => OffsetTo(a).NearTriangleVector;
-    public TridVectorInt VertexVectorTo(TridVectorInt a)
-        => OffsetTo(a).NearVertexVector;
-    public TridVectorInt VertexVectorTo(TridVector a)
-        => OffsetTo(a).NearVertexVector;
-    public int Distance(TridVectorInt a)
-        => OffsetTo(a).Length;
-    public float Distance(TridVector a)
-        => OffsetTo(a).Length;
-    public TridVectorInt Rotate(int rotations = 1)
-        => rotations.PosMod(6) switch
+    public i Length
+    => XYZ.Abs().AddComps() / 2;
+    public tvf Normalized
+    {
+        get
         {
+            var length = Length;
+            return length > 0 ? this / length : default;
+        }
+    }
+    public TridShape Shape
+        => XY.ModEuclid(UnitLength) switch
+        {
+            (0, 0) => TridShape.Vertex,
+            (3, 0) or (3, 3) or (0, 3) => TridShape.Edge,
+            (2, 2) or (4, 4) => TridShape.Triangle,
+            _ => TridShape.None
+        };
+    public i X
+        => XY.X;
+    public i Y
+        => XY.Y;
+    public i Z
+        => -XY.X - XY.Y;
+    public i3 XYZ
+        => XY.Append(Z);
+    public f2 Euclid
+       => Float.Euclid;
+
+    public tvi OffsetTo(tvi a)
+        => a - this;
+    public tvi OffsetFrom(tvi a)
+        => this - a;
+    public i DistanceTo(tvi a)
+        => OffsetTo(a).Length;
+    public i DistanceFrom(tvi a)
+        => OffsetFrom(a).Length;
+    public tvf DirectionTo(tvi a)
+        => OffsetTo(a).Normalized;
+    public tvf DirectionFrom(tvi a)
+        => OffsetFrom(a).Normalized;
+    public i Dot(tvi a)
+        => XYZ.Dot(a.XYZ);
+
+    public tvf OffsetTo(tvf a)
+        => a - this;
+    public tvf OffsetFrom(tvf a)
+        => this - a;
+    public f DistanceTo(tvf a)
+        => OffsetTo(a).Length;
+    public f DistanceFrom(tvf a)
+        => OffsetFrom(a).Length;
+    public tvf DirectionTo(tvf a)
+        => OffsetTo(a).Normalized;
+    public tvf DirectionFrom(tvf a)
+        => OffsetFrom(a).Normalized;
+    public f Dot(tvf a)
+        => XYZ.ToFloat3().Dot(a.XYZ);
+
+    public f Angle
+        => Float.Angle;
+    public f SignedAngle
+        => Float.SignedAngle;
+    public f ClockwiseAngle
+        => Float.ClockwiseAngle;
+    public tvi Rotate60(i rotations = 1)
+        => rotations.ModEuclid(6) switch
+        {
+            0 => new(+X, +Y),
             1 => new(-Y, -Z),
             2 => new(+Z, +X),
             3 => new(-X, -Y),
             4 => new(+Y, +Z),
             5 => new(-Z, -X),
-            _ => new(+X, +Y),
+            _ => default,
         };
-    public TridVectorInt RotateAround(TridVectorInt around, int rotations = 1)
-        => (this - around).Rotate(rotations) + around;
+    public tvf Rotate30(i rotations = 1)
+        => Float.Rotate30(rotations);
 
-    internal TridVectorInt NearVertexVector
-    {
-        get
-        {
-            Axis maxAxis = MaxAxis;
-            VertexDirection direction = (VertexDirection)(maxAxis | MinAxis);
-            TridVectorInt vector = DirectionVector(direction);
-            return vector.MaxAxis == maxAxis ? vector : -vector;
-        }
-    }
-    internal TridVectorInt NearTriangleVector
-    {
-        get
-        {
-            Axis axis = AbsMaxAxis;
-            TriangleDirection direction = (TriangleDirection)axis;
-            if (Comp(axis) < 0f)
-                direction |= TriangleDirection.Neg;
-            return DirectionVector(direction);
-        }
-    }
-    internal Axis MaxAxis
-        => NewHelpers.MaxAxis(X, Y, Z);
-    internal Axis MinAxis
-        => NewHelpers.MinAxis(X, Y, Z);
-    internal Axis AbsMaxAxis
-        => NewHelpers.MaxAxis(X.Abs(), Y.Abs(), Z.Abs());
+    public f AngleTo(tvf a)
+        => Float.AngleTo(a);
+    public f SignedAngleTo(tvf a)
+        => Float.SignedAngleTo(a);
+    public f ClockwiseAngleTo(tvf a)
+        => Float.ClockwiseAngleTo(a);
+
+    public f AngleTo(tvi a)
+        => Float.AngleTo(a.Float);
+    public f SignedAngleTo(tvi a)
+        => Float.SignedAngleTo(a.Float);
+    public f ClockwiseAngleTo(tvi a)
+        => Float.ClockwiseAngleTo(a.Float);
+
     #endregion
 
     #region Operators
-    // -
-    public static TridVectorInt operator -(TridVectorInt a)
-        => new(-a.X, -a.Y);
-    // VectorInt <> VectorInt
-    public static TridVectorInt operator +(TridVectorInt a, TridVectorInt b)
-        => new(a.X + b.X, a.Y + b.Y);
-    public static TridVectorInt operator -(TridVectorInt a, TridVectorInt b)
-        => new(a.X - b.X, a.Y - b.Y);
-    public static TridVectorInt operator *(TridVectorInt a, TridVectorInt b)
-        => new(a.X * b.X, a.Y * b.Y);
-    public static TridVectorInt operator /(TridVectorInt a, TridVectorInt b)
-        => new(a.X / b.X, a.Y / b.Y);
-    public static TridVectorInt operator %(TridVectorInt a, TridVectorInt b)
-        => new(a.X % b.X, a.Y % b.Y);
-    // VectorInt <> Int
-    public static TridVectorInt operator +(TridVectorInt a, int b)
-        => new(a.X + b, a.Y + b);
-    public static TridVectorInt operator -(TridVectorInt a, int b)
-        => new(a.X - b, a.Y - b);
-    public static TridVectorInt operator *(TridVectorInt a, int b)
-        => new(a.X * b, a.Y * b);
-    public static TridVectorInt operator /(TridVectorInt a, int b)
-        => new(a.X / b, a.Y / b);
-    public static TridVectorInt operator %(TridVectorInt a, int b)
-        => new(a.X % b, a.Y % b);
-    // Int <> VectorInt
-    public static TridVectorInt operator +(int a, TridVectorInt b)
-        => new(b.X + a, b.Y + a);
-    public static TridVectorInt operator -(int a, TridVectorInt b)
-        => new(b.X - a, b.Y - a);
-    public static TridVectorInt operator *(int a, TridVectorInt b)
-        => new(b.X * a, b.Y * a);
-    public static TridVectorInt operator /(int a, TridVectorInt b)
-        => new(b.X / a, b.Y / a);
-    public static TridVectorInt operator %(int a, TridVectorInt b)
-        => new(b.X % a, b.Y % a);
-    // VectorInt <> VectorFloat
-    public static TridVector operator +(TridVectorInt a, TridVector b)
-        => new(a.X + b.X, a.Y + b.Y);
-    public static TridVector operator -(TridVectorInt a, TridVector b)
-        => new(a.X - b.X, a.Y - b.Y);
-    public static TridVector operator *(TridVectorInt a, TridVector b)
-        => new(a.X * b.X, a.Y * b.Y);
-    public static TridVector operator /(TridVectorInt a, TridVector b)
-        => new(a.X / b.X, a.Y / b.Y);
-    public static TridVector operator %(TridVectorInt a, TridVector b)
-        => new(a.X % b.X, a.Y % b.Y);
-    // VectorInt <> Float
-    public static TridVector operator +(TridVectorInt a, float b)
-        => new(a.X + b, a.Y + b);
-    public static TridVector operator -(TridVectorInt a, float b)
-        => new(a.X - b, a.Y - b);
-    public static TridVector operator *(TridVectorInt a, float b)
-        => new(a.X * b, a.Y * b);
-    public static TridVector operator /(TridVectorInt a, float b)
-        => new(a.X / b, a.Y / b);
-    public static TridVector operator %(TridVectorInt a, float b)
-        => new(a.X % b, a.Y % b);
-    // Float <> VectorInt
-    public static TridVector operator +(float a, TridVectorInt b)
-        => new(b.X + a, b.Y + a);
-    public static TridVector operator -(float a, TridVectorInt b)
-        => new(b.X - a, b.Y - a);
-    public static TridVector operator *(float a, TridVectorInt b)
-        => new(b.X * a, b.Y * a);
-    public static TridVector operator /(float a, TridVectorInt b)
-        => new(b.X / a, b.Y / a);
-    public static TridVector operator %(float a, TridVectorInt b)
-        => new(b.X % a, b.Y % a);
+
+    public static tvi operator -(tvi a)
+        => new(a.XY.Neg());
+    public static tvi operator +(tvi a)
+        => new(a.XY);
+
+    public static tvi operator +(tvi a, tvi b)
+        => new(a.XY.Add(b.XY));
+    public static tvi operator -(tvi a, tvi b)
+        => new(a.XY.Sub(b.XY));
+    public static tvi operator *(tvi a, tvi b)
+        => new(a.XY.Mul(b.XY));
+    public static tvi operator /(tvi a, tvi b)
+        => new(a.XY.Div(b.XY));
+    public static tvi operator %(tvi a, tvi b)
+        => new(a.XY.Rem(b.XY));
+
+    public static tvi operator +(tvi a, i b)
+        => new(a.XY.Add(b));
+    public static tvi operator -(tvi a, i b)
+        => new(a.XY.Sub(b));
+    public static tvi operator *(tvi a, i b)
+        => new(a.XY.Mul(b));
+    public static tvi operator /(tvi a, i b)
+        => new(a.XY.Div(b));
+    public static tvi operator %(tvi a, i b)
+        => new(a.XY.Rem(b));
+
+    public static tvf operator +(tvi a, tvf b)
+        => new(a.XY.ToFloat2().Add(b.XY));
+    public static tvf operator -(tvi a, tvf b)
+        => new(a.XY.ToFloat2().Sub(b.XY));
+    public static tvf operator *(tvi a, tvf b)
+        => new(a.XY.ToFloat2().Mul(b.XY));
+    public static tvf operator /(tvi a, tvf b)
+        => new(a.XY.ToFloat2().Div(b.XY));
+    public static tvf operator %(tvi a, tvf b)
+        => new(a.XY.ToFloat2().Rem(b.XY));
+
+    public static tvf operator +(tvi a, f b)
+        => new(a.XY.ToFloat2().Add(b));
+    public static tvf operator -(tvi a, f b)
+        => new(a.XY.ToFloat2().Sub(b));
+    public static tvf operator *(tvi a, f b)
+        => new(a.XY.ToFloat2().Mul(b));
+    public static tvf operator /(tvi a, f b)
+        => new(a.XY.ToFloat2().Div(b));
+    public static tvf operator %(tvi a, f b)
+        => new(a.XY.ToFloat2().Rem(b));
+
     #endregion
 
-    #region Casts
+    #region Conversions
+
     public override string ToString()
         => $"(X: {X},  Y: {Y},  Z: {Z})";
-    public static implicit operator TridVector(TridVectorInt t)
-        => new(t.X, t.Y);
-    public TridVector Float
-        => (TridVector)this;
+    public static implicit operator tvf(tvi t)
+        => new(t.XY.ToFloat2());
+    public tvf Float
+        => (tvf)this;
+
     #endregion
 
     #region IEquatable
-    public static bool operator ==(TridVectorInt t, TridVectorInt a)
+
+    public static bool operator ==(tvi t, tvi a)
         => t.Equals(a);
-    public static bool operator !=(TridVectorInt t, TridVectorInt a)
+    public static bool operator !=(tvi t, tvi a)
         => !t.Equals(a);
-    public bool Equals(TridVectorInt a)
-        => X == a.X && Y == a.Y;
+    public bool Equals(tvi a)
+        => XY == a.XY;
     public override bool Equals(object a)
-        => a is not null && a is TridVectorInt vertex && Equals(vertex);
-    public override int GetHashCode()
-        => X.GetHashCode() ^ (Y.GetHashCode() << 2);
+        => a is not null && a is tvi vertex && Equals(vertex);
+    public override i GetHashCode()
+        => XY.GetHashCode();
+
     #endregion
 }
